@@ -1,0 +1,87 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Harness Configuration",
+  "description": "Configuration schema for @wonseok-han/harness-core",
+  "type": "object",
+  "required": ["project"],
+  "properties": {
+    "project": {
+      "type": "object",
+      "required": ["name", "framework", "packageManager", "language"],
+      "properties": {
+        "name": { "type": "string" },
+        "framework": {
+          "type": "string",
+          "enum": ["nextjs", "nuxt", "svelte", "remix", "astro", "vite-react", "vite-vue", "express", "fastify", "nest", "unknown"]
+        },
+        "packageManager": {
+          "type": "string",
+          "enum": ["npm", "yarn", "pnpm", "bun"]
+        },
+        "language": {
+          "type": "string",
+          "enum": ["typescript", "javascript"]
+        }
+      }
+    },
+    "architecture": {
+      "type": "object",
+      "properties": {
+        "style": {
+          "type": "string",
+          "enum": ["fsd", "clean", "mvc", "modular", "flat", "custom"]
+        },
+        "enforceIndexGen": { "type": "boolean", "default": true },
+        "forbiddenImports": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "development": {
+      "type": "object",
+      "properties": {
+        "linter": { "type": "string" },
+        "formatter": { "type": "string" },
+        "styling": { "type": "string" }
+      }
+    },
+    "testing": {
+      "type": "object",
+      "properties": {
+        "runner": { "type": "string" },
+        "minCoverage": {
+          "type": "object",
+          "properties": {
+            "statements": { "type": "number", "minimum": 0, "maximum": 100 },
+            "branches": { "type": "number", "minimum": 0, "maximum": 100 },
+            "functions": { "type": "number", "minimum": 0, "maximum": 100 },
+            "lines": { "type": "number", "minimum": 0, "maximum": 100 }
+          }
+        },
+        "requireTestFileWithImplementation": { "type": "boolean", "default": true }
+      }
+    },
+    "agent": {
+      "type": "object",
+      "properties": {
+        "persona": { "type": "string" },
+        "allowedScopes": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "adapters": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["claude", "cursor", "copilot", "windsurf", "aider", "generic"]
+          },
+          "default": ["generic"]
+        }
+      }
+    }
+  }
+}
