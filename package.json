@@ -19,7 +19,6 @@
   },
   "files": [
     "dist",
-    "templates",
     "schema"
   ],
   "scripts": {
@@ -38,7 +37,14 @@
     "guardrails",
     "sdlc",
     "claude",
+    "cursor",
+    "copilot",
+    "windsurf",
+    "aider",
     "agent",
+    "scaffold",
+    "cli",
+    "devtools",
     "framework"
   ],
   "author": "wonseok-han <oshan1112@gmail.com>",
