@@ -142,7 +142,7 @@ The agent follows the SDLC pipeline automatically:
 
 ## Configuration
 
-`harness.config.json` controls everything:
+`harness.config.json` controls everything. See [docs/configuration.md](docs/configuration.md) for the full reference.
 
 ```json
 {
