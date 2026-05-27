@@ -1,6 +1,6 @@
 import type { HarnessConfig } from '../../types/index.js';
 import type { AgentAdapter, GeneratedOutput } from './types.js';
-import { buildProjectContext, buildConventionRules, buildWorkflowRules, buildToolsSection } from './shared.js';
+import { buildProjectContext, buildConventionRules, buildWorkflowRules, buildCodingPrinciplesSection, buildToolsSection } from './shared.js';
 import { writeText, ensureDir, resolvePath } from '../../utils/index.js';
 
 export const copilotAdapter: AgentAdapter = {
@@ -15,6 +15,7 @@ export const copilotAdapter: AgentAdapter = {
       buildProjectContext(config),
       buildConventionRules(config),
       buildWorkflowRules(config),
+      buildCodingPrinciplesSection(),
       buildToolsSection(config),
     ].join('\n');
     files['.github/copilot-instructions.md'] = instructions;

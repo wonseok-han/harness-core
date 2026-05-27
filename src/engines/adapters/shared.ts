@@ -85,6 +85,22 @@ export function buildWorkflowRules(config: HarnessConfig): string {
   return lines.join('\n');
 }
 
+export function buildCodingPrinciplesSection(): string {
+  const lines: string[] = [];
+
+  lines.push('## Coding Principles');
+  lines.push('');
+  lines.push('Based on [Andrej Karpathy\'s guidelines](https://github.com/multica-ai/andrej-karpathy-skills).');
+  lines.push('');
+  lines.push('1. **Think Before Coding** — State assumptions explicitly. If uncertain, ask. Don\'t pick silently among multiple interpretations.');
+  lines.push('2. **Simplicity First** — Minimum code that solves the problem. No speculative features, no premature abstractions, no error handling for impossible scenarios.');
+  lines.push('3. **Surgical Changes** — Touch only what you must. Don\'t improve adjacent code. Match existing style. Every changed line should trace to the request.');
+  lines.push('4. **Goal-Driven Execution** — Define verifiable success criteria before coding. Loop until verified.');
+  lines.push('');
+
+  return lines.join('\n');
+}
+
 export function buildToolsSection(config: HarnessConfig): string {
   const lines: string[] = [];
 

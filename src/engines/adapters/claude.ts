@@ -1,6 +1,6 @@
 import type { HarnessConfig } from '../../types/index.js';
 import type { AgentAdapter, GeneratedOutput } from './types.js';
-import { buildProjectContext, buildConventionRules, buildWorkflowRules, buildToolsSection } from './shared.js';
+import { buildProjectContext, buildConventionRules, buildWorkflowRules, buildCodingPrinciplesSection, buildToolsSection } from './shared.js';
 import { generateClaudeHooks } from '../policy/hooks/generator.js';
 import { writeText, ensureDir, resolvePath } from '../../utils/index.js';
 
@@ -28,6 +28,9 @@ export const claudeAdapter: AgentAdapter = {
 
     // .claude/workflow.md
     files['.claude/workflow.md'] = `# Workflow\n\n${buildWorkflowRules(config)}`;
+
+    // .claude/coding-principles.md
+    files['.claude/coding-principles.md'] = buildCodingPrinciplesSection();
 
     // Write files
     for (const [path, content] of Object.entries(files)) {

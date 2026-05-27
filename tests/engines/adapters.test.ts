@@ -159,6 +159,8 @@ describe('shared content', () => {
       expect(allContent).toContain('fsd');
       expect(allContent).toContain('features/*');
       expect(allContent).toContain('harness generate');
+      expect(allContent).toContain('Coding Principles');
+      expect(allContent).toContain('Karpathy');
     }
   });
 });
