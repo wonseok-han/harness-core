@@ -13,7 +13,7 @@ Follow this order strictly:
 ```
 harness generate <type> <name>
 ```
-Available types: component, hook, util, service, model, test.
+Available types: component, hook, util, service, model.
 
 Do NOT create files manually. The scaffolder ensures:
 - Correct directory placement per architecture style
