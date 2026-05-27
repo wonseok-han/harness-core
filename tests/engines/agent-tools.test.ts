@@ -27,9 +27,8 @@ describe('scaffold', () => {
     const config = createDefaultConfig();
     const result = await scaffold(tempDir, config, 'component', 'UserProfile');
 
-    expect(result.created).toHaveLength(2);
+    expect(result.created).toHaveLength(1);
     expect(result.created.some((f) => f.includes('UserProfile.tsx'))).toBe(true);
-    expect(result.created.some((f) => f.includes('UserProfile.test.tsx'))).toBe(true);
 
     const content = await readFile(join(tempDir, result.created[0]!), 'utf-8');
     expect(content).toContain('UserProfile');
@@ -39,9 +38,8 @@ describe('scaffold', () => {
     const config = createDefaultConfig();
     const result = await scaffold(tempDir, config, 'util', 'format-date');
 
-    expect(result.created).toHaveLength(2);
+    expect(result.created).toHaveLength(1);
     expect(result.created.some((f) => f.includes('formatDate.ts'))).toBe(true);
-    expect(result.created.some((f) => f.includes('formatDate.test.ts'))).toBe(true);
   });
 
   it('should skip existing files', async () => {

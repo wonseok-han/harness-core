@@ -57,7 +57,7 @@ export function buildWorkflowRules(config: HarnessConfig): string {
   lines.push('```');
   lines.push('harness generate <type> <name>');
   lines.push('```');
-  lines.push('Available types: component, hook, util, service, model, test.');
+  lines.push('Available types: component, hook, util, service, model.');
   lines.push('');
   lines.push('Do NOT create files manually. The scaffolder ensures:');
   lines.push('- Correct directory placement per architecture style');

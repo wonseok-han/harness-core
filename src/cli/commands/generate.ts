@@ -4,7 +4,7 @@ import { loadConfig } from '../../config/index.js';
 import { scaffold } from '../../engines/agent-tools/index.js';
 import type { ScaffoldType } from '../../engines/agent-tools/index.js';
 
-const VALID_TYPES: ScaffoldType[] = ['component', 'hook', 'util', 'service', 'model', 'test'];
+const VALID_TYPES: ScaffoldType[] = ['component', 'hook', 'util', 'service', 'model'];
 
 export const generateCommand = new Command('generate')
   .description('Scaffold a new file with standardized structure')

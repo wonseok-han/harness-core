@@ -145,7 +145,7 @@ function buildWorkflow(config: HarnessConfig): string {
   lines.push('harness sync                 # Sync architecture rules & check violations');
   lines.push('harness sync --check         # Check-only mode (CI / pre-commit)');
   lines.push('harness sync --watch         # Auto-sync on config change (run with dev server)');
-  lines.push('harness generate <type> <n>  # Scaffold: component, hook, util, service, model, test');
+  lines.push('harness generate <type> <n>  # Scaffold: component, hook, util, service, model');
   lines.push('harness test                 # Run tests with self-healing feedback loop');
   lines.push('harness test --coverage      # Run with coverage reporting');
   lines.push('```');

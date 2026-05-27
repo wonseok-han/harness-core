@@ -2,7 +2,7 @@ import type { HarnessConfig } from '../../types/index.js';
 import { writeText, ensureDir, resolvePath, fileExists } from '../../utils/index.js';
 import { dirname, join } from 'node:path';
 
-export type ScaffoldType = 'component' | 'hook' | 'util' | 'service' | 'model' | 'test';
+export type ScaffoldType = 'component' | 'hook' | 'util' | 'service' | 'model';
 
 interface ScaffoldResult {
   created: string[];
@@ -64,20 +64,12 @@ function getTemplateFiles(
           path: `src/components/${pascal}/${pascal}.${extx}`,
           content: generateComponentTemplate(pascal, config),
         },
-        {
-          path: `src/components/${pascal}/${pascal}.test.${extx}`,
-          content: generateComponentTestTemplate(pascal, config),
-        },
       ];
     case 'hook':
       return [
         {
           path: `src/hooks/use${pascal}.${ext}`,
           content: `export function use${pascal}() {\n  // TODO: implement\n}\n`,
-        },
-        {
-          path: `src/hooks/use${pascal}.test.${ext}`,
-          content: `import { describe, it, expect } from '${config.testing.runner}';\nimport { use${pascal} } from './use${pascal}';\n\ndescribe('use${pascal}', () => {\n  it('should work', () => {\n    expect(use${pascal}).toBeDefined();\n  });\n});\n`,
         },
       ];
     case 'util':
@@ -86,20 +78,12 @@ function getTemplateFiles(
           path: `src/utils/${camel}.${ext}`,
           content: `export function ${camel}() {\n  // TODO: implement\n}\n`,
         },
-        {
-          path: `src/utils/${camel}.test.${ext}`,
-          content: `import { describe, it, expect } from '${config.testing.runner}';\nimport { ${camel} } from './${camel}';\n\ndescribe('${camel}', () => {\n  it('should work', () => {\n    expect(${camel}).toBeDefined();\n  });\n});\n`,
-        },
       ];
     case 'service':
       return [
         {
           path: `src/services/${camel}.${ext}`,
           content: `export class ${pascal}Service {\n  // TODO: implement\n}\n`,
-        },
-        {
-          path: `src/services/${camel}.test.${ext}`,
-          content: `import { describe, it, expect } from '${config.testing.runner}';\nimport { ${pascal}Service } from './${camel}';\n\ndescribe('${pascal}Service', () => {\n  it('should be defined', () => {\n    expect(${pascal}Service).toBeDefined();\n  });\n});\n`,
         },
       ];
     case 'model':
@@ -111,13 +95,6 @@ function getTemplateFiles(
             : `/** @typedef {Object} ${pascal}\n * @property {string} id\n */\n`,
         },
       ];
-    case 'test':
-      return [
-        {
-          path: `tests/${camel}.test.${ext}`,
-          content: `import { describe, it, expect } from '${config.testing.runner}';\n\ndescribe('${camel}', () => {\n  it('should work', () => {\n    expect(true).toBe(true);\n  });\n});\n`,
-        },
-      ];
   }
 }
 
@@ -126,10 +103,6 @@ function generateComponentTemplate(name: string, config: HarnessConfig): string 
     return `interface ${name}Props {\n  // TODO: define props\n}\n\nexport function ${name}({ }: ${name}Props) {\n  return (\n    <div>\n      <h1>${name}</h1>\n    </div>\n  );\n}\n`;
   }
   return `export function ${name}() {\n  return (\n    <div>\n      <h1>${name}</h1>\n    </div>\n  );\n}\n`;
-}
-
-function generateComponentTestTemplate(name: string, config: HarnessConfig): string {
-  return `import { describe, it, expect } from '${config.testing.runner}';\n\ndescribe('${name}', () => {\n  it('should render', () => {\n    expect(true).toBe(true);\n  });\n});\n`;
 }
 
 async function generateBarrelExport(root: string, dir: string): Promise<void> {
