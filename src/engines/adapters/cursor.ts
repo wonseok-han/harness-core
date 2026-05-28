@@ -1,7 +1,11 @@
 import type { HarnessConfig } from '../../types/index.js';
 import type { AgentAdapter, GeneratedOutput } from './types.js';
-import { buildProjectContext, buildConventionRules, buildWorkflowRules, buildCodingPrinciplesSection, buildToolsSection } from './shared.js';
+import { buildProjectContext, buildConventionRules, buildWorkflowRules, buildCodingPrinciplesSection, buildCustomCodingStandards, buildToolsSection } from './shared.js';
 import { writeText, ensureDir, resolvePath } from '../../utils/index.js';
+
+function wrapMdc(description: string, content: string): string {
+  return `---\ndescription: ${description}\nalwaysApply: true\n---\n\n${content}`;
+}
 
 export const cursorAdapter: AgentAdapter = {
   name: 'Cursor',
@@ -10,30 +14,28 @@ export const cursorAdapter: AgentAdapter = {
   async generate(root: string, config: HarnessConfig): Promise<GeneratedOutput> {
     const files: Record<string, string> = {};
 
-    // .cursorrules (main instruction file for Cursor)
-    const cursorrules = [
-      buildProjectContext(config),
-      buildConventionRules(config),
+    // .cursor/rules/harness-*.mdc — alwaysApply: true, auto-loaded by Cursor
+    // NOTE: .cursorrules is deprecated — Cursor now uses .cursor/rules/*.mdc
+    files['.cursor/rules/harness-conventions.mdc'] = wrapMdc(
+      'Project conventions and coding standards enforced by harness-core',
+      `${buildProjectContext(config)}${buildConventionRules(config)}${buildCustomCodingStandards(config)}`,
+    );
+
+    files['.cursor/rules/harness-workflow.mdc'] = wrapMdc(
+      'Development workflow rules and scaffolding guidelines',
       buildWorkflowRules(config),
+    );
+
+    files['.cursor/rules/harness-principles.mdc'] = wrapMdc(
+      'Coding principles and best practices',
       buildCodingPrinciplesSection(),
+    );
+
+    files['.cursor/rules/harness-tech-stack.mdc'] = wrapMdc(
+      'Tech stack and tooling configuration',
       buildToolsSection(config),
-    ].join('\n');
-    files['.cursorrules'] = cursorrules;
-
-    // .cursor/rules/*.md (Cursor also reads from this directory)
-    files['.cursor/rules/conventions.mdc'] = wrapCursorRule(
-      'conventions',
-      'Always',
-      buildConventionRules(config),
     );
 
-    files['.cursor/rules/workflow.mdc'] = wrapCursorRule(
-      'workflow',
-      'Always',
-      buildWorkflowRules(config),
-    );
-
-    // Write files
     for (const [path, content] of Object.entries(files)) {
       const fullPath = resolvePath(root, path);
       await ensureDir(resolvePath(fullPath, '..'));
@@ -42,16 +44,7 @@ export const cursorAdapter: AgentAdapter = {
 
     return {
       files,
-      description: '.cursorrules + .cursor/rules/*.mdc',
+      description: '.cursor/rules/harness-*.mdc',
     };
   },
 };
-
-function wrapCursorRule(name: string, alwaysApply: string, content: string): string {
-  return `---
-description: ${name}
-alwaysApply: ${alwaysApply === 'Always'}
----
-
-${content}`;
-}

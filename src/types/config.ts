@@ -4,6 +4,7 @@ export interface HarnessConfig {
   development: DevelopmentConfig;
   testing: TestingConfig;
   agent: AgentConfig;
+  rules?: RulesConfig;
 }
 
 export interface ProjectConfig {
@@ -70,3 +71,39 @@ export type ArchitectureStyle =
   | 'modular'
   | 'flat'
   | 'custom';
+
+// ─── Rules: injectable conventions ───
+
+export interface RulesConfig {
+  fileNaming?: FileNamingConfig;
+  codingStandards?: CodingStandard[];
+  testScope?: TestScopeConfig;
+  scaffolderTypes?: Record<string, ScaffolderTypeConfig>;
+}
+
+export interface FileNamingConfig {
+  components?: NamingConvention;
+  hooks?: NamingConvention;
+  utils?: NamingConvention;
+  services?: NamingConvention;
+  models?: NamingConvention;
+  testSuffix?: string;
+}
+
+export type NamingConvention = 'PascalCase' | 'camelCase' | 'kebab-case' | 'snake_case';
+
+export interface CodingStandard {
+  id: string;
+  description: string;
+  severity?: 'error' | 'warn' | 'info';
+}
+
+export interface TestScopeConfig {
+  include?: string[];
+  exclude?: string[];
+}
+
+export interface ScaffolderTypeConfig {
+  directory: string;
+  naming?: NamingConvention;
+}

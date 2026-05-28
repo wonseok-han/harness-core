@@ -146,6 +146,87 @@ AI agent configuration. Controls which adapters generate config files and what s
 
 ---
 
+### `rules`
+
+Injectable convention rules. Override defaults or add project-specific standards that get injected into all AI agent context files.
+
+#### `rules.fileNaming`
+
+Override file naming conventions per scaffold type.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `components` | `NamingConvention` | `"PascalCase"` | Component file naming (e.g., `UserProfile.tsx` vs `user-profile.tsx`) |
+| `hooks` | `NamingConvention` | `"camelCase"` | Hook file naming |
+| `utils` | `NamingConvention` | `"camelCase"` | Utility file naming |
+| `services` | `NamingConvention` | `"camelCase"` | Service file naming |
+| `models` | `NamingConvention` | `"camelCase"` | Model file naming |
+| `testSuffix` | `string` | `".test"` | Test file suffix (`.test` or `.spec`) |
+
+**NamingConvention values:** `PascalCase`, `camelCase`, `kebab-case`, `snake_case`
+
+#### `rules.codingStandards`
+
+Custom coding rules injected into AI agent context. These are text-based rules that the AI agent follows — not enforced by hooks, but always visible in the generated instruction files.
+
+```json
+{
+  "codingStandards": [
+    { "id": "no-enum", "description": "Do not use enum. Use as const instead", "severity": "error" },
+    { "id": "korean-comments", "description": "All code comments must be in Korean", "severity": "error" },
+    { "id": "spdx-header", "description": "SPDX license header required on every source file", "severity": "warn" },
+    { "id": "no-inline-styles", "description": "Use Tailwind CSS classes only, no inline styles", "severity": "error" }
+  ]
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | `string` | Y | Short identifier (e.g., `no-enum`, `korean-comments`) |
+| `description` | `string` | Y | Human-readable rule text shown to AI agent |
+| `severity` | `"error" \| "warn" \| "info"` | N | Visual indicator in generated output (default: `"error"`) |
+
+#### `rules.testScope`
+
+Control which files require test companions. By default, all `src/**/*.ts` files (except index, types, .d.ts) need tests. Use this to narrow the scope.
+
+```json
+{
+  "testScope": {
+    "include": ["src/**/hooks/**/*.ts", "src/**/lib/**/*.ts"],
+    "exclude": ["src/**/index.ts"]
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `include` | `string[]` | Glob patterns for files that need tests |
+| `exclude` | `string[]` | Glob patterns to exclude from test requirement |
+
+#### `rules.scaffolderTypes`
+
+Add custom scaffold types or override built-in type directories. Custom types are available via `harness generate <type> <name>`.
+
+```json
+{
+  "scaffolderTypes": {
+    "feature": { "directory": "src/features", "naming": "kebab-case" },
+    "entity": { "directory": "src/entities", "naming": "kebab-case" },
+    "widget": { "directory": "src/widgets", "naming": "kebab-case" }
+  }
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `directory` | `string` | Y | Target directory relative to project root |
+| `naming` | `NamingConvention` | N | Naming convention for this type (overrides `fileNaming` defaults) |
+
+Built-in types (`component`, `hook`, `util`, `service`, `model`) can also be overridden by specifying them here.
+
+---
+
 ## Full Example
 
 ```json
@@ -158,10 +239,11 @@ AI agent configuration. Controls which adapters generate config files and what s
   },
   "architecture": {
     "style": "fsd",
-    "enforceIndexGen": true,
+    "enforceIndexGen": false,
     "forbiddenImports": {
-      "features/*": ["pages/*", "app/*"],
-      "entities/*": ["features/*"]
+      "shared/*": ["features/*", "entities/*", "pages/*", "widgets/*"],
+      "entities/*": ["features/*", "pages/*", "widgets/*"],
+      "features/*": ["pages/*", "widgets/*"]
     }
   },
   "development": {
@@ -183,6 +265,26 @@ AI agent configuration. Controls which adapters generate config files and what s
     "persona": "senior-frontend-developer",
     "allowedScopes": ["src/**/*", "tests/**/*"],
     "adapters": ["claude", "cursor"]
+  },
+  "rules": {
+    "fileNaming": {
+      "components": "kebab-case",
+      "utils": "kebab-case",
+      "services": "kebab-case",
+      "testSuffix": ".test"
+    },
+    "codingStandards": [
+      { "id": "no-enum", "description": "Do not use enum. Use as const instead", "severity": "error" },
+      { "id": "korean-comments", "description": "All code comments must be in Korean", "severity": "error" }
+    ],
+    "testScope": {
+      "include": ["src/**/hooks/**/*.ts", "src/**/lib/**/*.ts"]
+    },
+    "scaffolderTypes": {
+      "feature": { "directory": "src/features", "naming": "kebab-case" },
+      "entity": { "directory": "src/entities", "naming": "kebab-case" },
+      "widget": { "directory": "src/widgets", "naming": "kebab-case" }
+    }
   }
 }
 ```

@@ -2,8 +2,10 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { resolve } from 'node:path';
+import { createRequire } from 'node:module';
 import { generateHuskyHooks, generateLintStagedConfig } from '../../engines/policy/index.js';
 import { getAdapter, getAdapterChoices } from '../../engines/adapters/index.js';
+import { discoverProject } from '../../engines/discovery/index.js';
 import { writeJson, writeText, ensureDir, resolvePath, fileExists } from '../../utils/index.js';
 import { runCommand } from '../../utils/index.js';
 import { createDefaultConfig } from '../../config/defaults.js';
@@ -13,25 +15,70 @@ import type {
   PackageManager,
   ArchitectureStyle,
   AgentType,
+  RulesConfig,
+  NamingConvention,
+  CodingStandard,
 } from '../../types/index.js';
 
-export const initCommand = new Command('init')
-  .description('Create a new project with full environment setup')
-  .argument('[name]', 'Project name (creates directory)')
-  .option('--root <path>', 'Initialize in an existing directory instead of creating new one')
-  .action(async (name: string | undefined, options: { root?: string }) => {
-    console.log(chalk.blue('\n🚀 Harness Project Initializer\n'));
+const PKG_NAME = '@wonseok-han/harness-core';
+const LOCAL_SCHEMA = `node_modules/${PKG_NAME}/schema/harness.config.schema.json`;
 
-    // ─── Step 1: Determine project root ───
+function getPkgVersion(): string {
+  const require = createRequire(import.meta.url);
+  const pkg = require('../../package.json') as { version: string };
+  return pkg.version;
+}
+
+function getRemoteSchema(): string {
+  const version = getPkgVersion();
+  return `https://raw.githubusercontent.com/wonseok-han/harness-core/v${version}/schema/harness.config.schema.json`;
+}
+
+async function resolveSchemaRef(root: string): Promise<string> {
+  const exists = await fileExists(resolvePath(root, LOCAL_SCHEMA));
+  return exists ? `./${LOCAL_SCHEMA}` : getRemoteSchema();
+}
+
+function withSchema(config: HarnessConfig, schemaRef: string): Record<string, unknown> {
+  return { $schema: schemaRef, ...config };
+}
+
+function isPathArg(arg: string): boolean {
+  return arg === '.' || arg.startsWith('./') || arg.startsWith('/') || arg.startsWith('..');
+}
+
+export const initCommand = new Command('init')
+  .description('Initialize a new project or adopt harness into an existing one')
+  .argument('[name-or-path]', 'Project name (creates directory) or path to existing project (e.g., ".")')
+  .option('--root <path>', 'Alias for path argument (backward compat)')
+  .option('--from <file>', 'Import config from JSON file (AI agent workflow)')
+  .action(async (nameOrPath: string | undefined, options: { root?: string; from?: string }) => {
+    // ─── Step 1: Determine project root and mode ───
     let root: string;
     let isNewProject: boolean;
+
+    if (options.from) {
+      const fromPath = resolve(options.from);
+      if (nameOrPath && !isPathArg(nameOrPath)) {
+        // harness init my-app --from config.json → new project
+        root = resolve(process.cwd(), nameOrPath);
+        await handleNewProjectFrom(root, nameOrPath, fromPath);
+      } else {
+        // harness init . --from config.json → adopt existing
+        root = nameOrPath ? resolve(nameOrPath) : (options.root ? resolve(options.root) : process.cwd());
+        await handleAdoptFrom(root, fromPath);
+      }
+      return;
+    }
 
     if (options.root) {
       root = resolve(options.root);
       isNewProject = false;
-      console.log(chalk.dim(`Initializing in existing directory: ${root}\n`));
-    } else if (name) {
-      root = resolve(process.cwd(), name);
+    } else if (nameOrPath && isPathArg(nameOrPath)) {
+      root = resolve(nameOrPath);
+      isNewProject = false;
+    } else if (nameOrPath) {
+      root = resolve(process.cwd(), nameOrPath);
       isNewProject = true;
     } else {
       const { projectName } = await inquirer.prompt<{ projectName: string }>([{
@@ -40,17 +87,26 @@ export const initCommand = new Command('init')
         message: 'Project name:',
         validate: (v: string) => v.trim().length > 0 || 'Name is required',
       }]);
-      name = projectName.trim();
-      root = resolve(process.cwd(), name);
+      nameOrPath = projectName.trim();
+      root = resolve(process.cwd(), nameOrPath);
       isNewProject = true;
     }
+
+    // Detect existing project → adopt mode
+    const hasPackageJson = await fileExists(resolvePath(root, 'package.json'));
+    if (!isNewProject && hasPackageJson) {
+      await handleAdoptInteractive(root);
+      return;
+    }
+
+    console.log(chalk.blue('\n🚀 Harness Project Initializer\n'));
 
     if (isNewProject) {
       if (await fileExists(root)) {
         const { proceed } = await inquirer.prompt<{ proceed: boolean }>([{
           type: 'confirm',
           name: 'proceed',
-          message: `Directory "${name}" already exists. Initialize inside it?`,
+          message: `Directory "${nameOrPath}" already exists. Initialize inside it?`,
           default: false,
         }]);
         if (!proceed) {
@@ -193,7 +249,10 @@ export const initCommand = new Command('init')
       },
     ]);
 
-    const projectName = name ?? root.split('/').pop() ?? 'my-project';
+    // ─── Step 2b: Rules preset ───
+    const rules = await promptRulesPreset(answers.architecture);
+
+    const projectName = (nameOrPath && !isPathArg(nameOrPath) ? nameOrPath : null) ?? root.split('/').pop() ?? 'my-project';
 
     // ─── Step 3: Build config ───
     const config = createDefaultConfig({
@@ -223,6 +282,7 @@ export const initCommand = new Command('init')
         allowedScopes: ['src/**/*', 'tests/**/*', 'public/**/*'],
         adapters: aiAdapters,
       },
+      rules,
     });
 
     console.log('');
@@ -263,7 +323,7 @@ export const initCommand = new Command('init')
     console.log(chalk.green('✅ Directory structure created'));
 
     // ─── Step 7: Generate harness config + guardrail files ───
-    await writeJson(resolvePath(root, 'harness.config.json'), config);
+    await writeJson(resolvePath(root, 'harness.config.json'), withSchema(config, await resolveSchemaRef(root)));
     console.log(chalk.green('✅ harness.config.json'));
 
     for (const adapterType of aiAdapters) {
@@ -301,6 +361,323 @@ export const initCommand = new Command('init')
     console.log(chalk.cyan(`  harness test`) + chalk.dim('          — Run tests with self-healing'));
     console.log('');
   });
+
+// ─── Adopt mode handlers ───
+
+async function handleNewProjectFrom(root: string, projectName: string, configPath: string): Promise<void> {
+  const { readJson: readJ } = await import('../../utils/index.js');
+
+  if (!(await fileExists(configPath))) {
+    console.log(chalk.red(`\n❌ File not found: ${configPath}\n`));
+    process.exitCode = 1;
+    return;
+  }
+
+  const config = await readJ<HarnessConfig>(configPath);
+  config.project.name = projectName;
+
+  console.log(chalk.blue('\n🚀 Harness Project Initializer (non-interactive)\n'));
+
+  // Create directory
+  if (!(await fileExists(root))) {
+    await ensureDir(root);
+    console.log(chalk.green(`📁 Created ${root}\n`));
+  }
+
+  // Framework scaffolding
+  const pm = config.project.packageManager;
+  const pmx = pm === 'pnpm' ? 'pnpx' : pm === 'bun' ? 'bunx' : 'npx';
+
+  console.log(chalk.blue('📦 Creating project...\n'));
+  const createResult = await createFrameworkProject(root, projectName, config.project.framework, pm, pmx);
+  if (!createResult.success) {
+    console.log(chalk.yellow(`⚠️  Framework scaffolding skipped: ${createResult.reason}`));
+    console.log(chalk.dim('   Setting up a minimal project structure instead.\n'));
+    await createMinimalProject(root, projectName, config);
+  }
+
+  // Install dev dependencies
+  console.log(chalk.blue('📦 Installing dev dependencies...\n'));
+  const devDeps = collectDevDependencies(config);
+  if (devDeps.length > 0) {
+    const installCmd = buildInstallCommand(pm, devDeps, true);
+    console.log(chalk.dim(`$ ${installCmd}\n`));
+    const installResult = await runCommand(installCmd, root, 120_000);
+    if (installResult.exitCode !== 0) {
+      console.log(chalk.yellow(`⚠️  Some packages failed to install.`));
+    } else {
+      console.log(chalk.green(`✅ Installed ${devDeps.length} dev dependencies`));
+    }
+  }
+
+  // Directory structure
+  console.log(chalk.blue('\n📂 Creating directory structure...\n'));
+  await createDirectoryStructure(root, config);
+  console.log(chalk.green('✅ Directory structure created'));
+
+  // Write config + adapter files
+  await writeJson(resolvePath(root, 'harness.config.json'), withSchema(config, await resolveSchemaRef(root)));
+  console.log(chalk.green('✅ harness.config.json'));
+
+  const adapters = config.agent?.adapters ?? ['generic'];
+  for (const adapterType of adapters) {
+    const adapter = getAdapter(adapterType);
+    const result = await adapter.generate(root, config);
+    console.log(chalk.green(`✅ ${adapter.name}: ${result.description}`));
+  }
+
+  // Husky + lint-staged
+  await generateHuskyHooks(root, config);
+  console.log(chalk.green('✅ .husky/'));
+
+  const lintStagedConfig = generateLintStagedConfig(config);
+  await writeJson(resolvePath(root, '.lintstagedrc.json'), lintStagedConfig);
+  console.log(chalk.green('✅ .lintstagedrc.json'));
+
+  // Git init
+  if (!(await fileExists(resolvePath(root, '.git')))) {
+    await runCommand('git init', root);
+    console.log(chalk.green('✅ git init'));
+  }
+
+  // tsconfig
+  if (config.project.language === 'typescript' && !(await fileExists(resolvePath(root, 'tsconfig.json')))) {
+    await writeJson(resolvePath(root, 'tsconfig.json'), getTsConfig(config.project.framework));
+    console.log(chalk.green('✅ tsconfig.json'));
+  }
+
+  console.log(chalk.blue(`\n🎉 Project "${projectName}" is ready!\n`));
+}
+
+async function handleAdoptFrom(root: string, configPath: string): Promise<void> {
+  const { readJson: readJ } = await import('../../utils/index.js');
+  const resolvedPath = resolve(configPath);
+
+  if (!(await fileExists(resolvedPath))) {
+    console.log(chalk.red(`\n❌ File not found: ${resolvedPath}\n`));
+    process.exitCode = 1;
+    return;
+  }
+
+  console.log(chalk.blue('\n🔧 Adopting harness into existing project\n'));
+
+  const config = await readJ<HarnessConfig>(resolvedPath);
+
+  // Write harness.config.json
+  await writeJson(resolvePath(root, 'harness.config.json'), withSchema(config, await resolveSchemaRef(root)));
+  console.log(chalk.green('✅ harness.config.json'));
+
+  // Generate adapter files only (safe — no husky, no lint-staged, no deps)
+  const adapters = config.agent?.adapters ?? ['generic'];
+  for (const adapterType of adapters) {
+    const adapter = getAdapter(adapterType);
+    const result = await adapter.generate(root, config);
+    console.log(chalk.green(`✅ ${adapter.name}: ${result.description}`));
+  }
+
+  console.log(chalk.blue('\n🎉 Harness adopted successfully!\n'));
+  console.log(chalk.dim('What was created:'));
+  console.log(chalk.dim('  - harness.config.json'));
+  console.log(chalk.dim('  - AI agent instruction files'));
+  console.log('');
+  console.log(chalk.dim('What was NOT touched:'));
+  console.log(chalk.dim('  - Existing husky hooks'));
+  console.log(chalk.dim('  - Existing lint-staged config'));
+  console.log(chalk.dim('  - Existing ESLint/Prettier config'));
+  console.log(chalk.dim('  - Existing directory structure'));
+  console.log('');
+  console.log('Next steps:');
+  console.log(chalk.cyan('  harness sync --watch') + chalk.dim('  — Auto-sync on config changes'));
+  console.log(chalk.cyan('  harness generate <type> <name>') + chalk.dim('  — Scaffold files'));
+  console.log('');
+}
+
+async function handleAdoptInteractive(root: string): Promise<void> {
+  console.log(chalk.blue('\n🔧 Existing project detected — adopting harness\n'));
+
+  const { config, detected } = await discoverProject(root);
+
+  console.log(chalk.dim('Detected:'));
+  console.log(chalk.dim(`  Framework: ${detected.framework} | PM: ${detected.packageManager} | Language: ${detected.language}`));
+  console.log(chalk.dim(`  Linter: ${detected.linter} | Formatter: ${detected.formatter} | Test: ${detected.testRunner}`));
+  console.log(chalk.dim(`  Architecture: ${detected.architecture} | Monorepo: ${detected.monorepo}`));
+  console.log(chalk.dim(`  AI agents: ${detected.adapters}`));
+  console.log('');
+
+  // Write config only — adapter files are generated by `harness sync`
+  await writeJson(resolvePath(root, 'harness.config.json'), withSchema(config, await resolveSchemaRef(root)));
+  console.log(chalk.green('✅ harness.config.json'));
+
+  console.log(chalk.blue('\n🎉 Harness adopted successfully!\n'));
+  console.log(chalk.dim('Existing husky/lint-staged/ESLint configs were NOT modified.'));
+  console.log('');
+  console.log('Next steps:');
+  console.log(chalk.cyan('  1.') + ' Customize rules in ' + chalk.cyan('harness.config.json'));
+  console.log(chalk.dim('     rules.codingStandards, rules.fileNaming, rules.scaffolderTypes, rules.testScope'));
+  console.log(chalk.cyan('  2.') + ' Generate adapter files: ' + chalk.cyan('harness sync'));
+  console.log('');
+}
+
+// ─── Rules presets ───
+
+type RulesPreset = 'default' | 'strict' | 'minimal' | 'custom';
+
+const STRICT_STANDARDS: CodingStandard[] = [
+  { id: 'no-enum', description: 'Do not use enum. Use as const object instead', severity: 'error' },
+  { id: 'no-any', description: 'Do not use any type. Use unknown instead', severity: 'error' },
+  { id: 'no-non-null-assertion', description: 'Do not use non-null assertion (!). Use proper null checks', severity: 'error' },
+  { id: 'strict-equality', description: 'Always use === and !== instead of == and !=', severity: 'error' },
+  { id: 'sort-imports', description: 'Keep imports sorted alphabetically', severity: 'warn' },
+];
+
+const AVAILABLE_STANDARDS: Array<{ name: string; value: CodingStandard }> = [
+  { name: 'no-enum (use as const instead)', value: { id: 'no-enum', description: 'Do not use enum. Use as const object instead', severity: 'error' } },
+  { name: 'no-any (use unknown instead)', value: { id: 'no-any', description: 'Do not use any type. Use unknown instead', severity: 'error' } },
+  { name: 'no-non-null-assertion (no ! operator)', value: { id: 'no-non-null-assertion', description: 'Do not use non-null assertion (!). Use proper null checks', severity: 'error' } },
+  { name: 'strict-equality (=== only)', value: { id: 'strict-equality', description: 'Always use === and !== instead of == and !=', severity: 'error' } },
+  { name: 'sort-imports (alphabetical)', value: { id: 'sort-imports', description: 'Keep imports sorted alphabetically', severity: 'warn' } },
+  { name: 'prefer-optional-chaining (?. operator)', value: { id: 'prefer-optional-chaining', description: 'Use optional chaining (?.) instead of manual null checks', severity: 'warn' } },
+  { name: 'template-literals (no string concatenation)', value: { id: 'template-literals', description: 'Use template literals instead of string concatenation', severity: 'warn' } },
+  { name: 'no-inline-styles (CSS classes only)', value: { id: 'no-inline-styles', description: 'Do not use inline styles. Use CSS classes or utility framework', severity: 'warn' } },
+];
+
+function getArchitectureScaffolderTypes(style: ArchitectureStyle): Record<string, { directory: string; naming: NamingConvention }> {
+  switch (style) {
+    case 'fsd':
+      return {
+        feature: { directory: 'src/features', naming: 'kebab-case' },
+        entity: { directory: 'src/entities', naming: 'kebab-case' },
+        widget: { directory: 'src/widgets', naming: 'kebab-case' },
+      };
+    case 'clean':
+      return {
+        usecase: { directory: 'src/application/usecases', naming: 'PascalCase' },
+        repository: { directory: 'src/domain/repositories', naming: 'PascalCase' },
+      };
+    default:
+      return {};
+  }
+}
+
+function buildPresetRules(preset: RulesPreset, architecture: ArchitectureStyle): RulesConfig {
+  const archTypes = getArchitectureScaffolderTypes(architecture);
+
+  switch (preset) {
+    case 'strict':
+      return {
+        fileNaming: {
+          components: 'PascalCase',
+          hooks: 'camelCase',
+          utils: 'camelCase',
+          services: 'camelCase',
+          models: 'camelCase',
+          testSuffix: '.test',
+        },
+        codingStandards: STRICT_STANDARDS,
+        testScope: {},
+        scaffolderTypes: archTypes,
+      };
+    case 'minimal':
+      return {
+        fileNaming: {
+          components: 'PascalCase',
+          hooks: 'camelCase',
+          utils: 'camelCase',
+          services: 'camelCase',
+          models: 'camelCase',
+          testSuffix: '.test',
+        },
+        codingStandards: [],
+        testScope: {},
+        scaffolderTypes: archTypes,
+      };
+    case 'default':
+    default:
+      return {
+        fileNaming: {
+          components: 'PascalCase',
+          hooks: 'camelCase',
+          utils: 'camelCase',
+          services: 'camelCase',
+          models: 'camelCase',
+          testSuffix: '.test',
+        },
+        codingStandards: [
+          { id: 'no-enum', description: 'Do not use enum. Use as const object instead', severity: 'error' },
+          { id: 'no-any', description: 'Do not use any type. Use unknown instead', severity: 'error' },
+        ],
+        testScope: {},
+        scaffolderTypes: archTypes,
+      };
+  }
+}
+
+async function promptRulesPreset(architecture: ArchitectureStyle): Promise<RulesConfig> {
+  const { preset } = await inquirer.prompt<{ preset: RulesPreset }>([{
+    type: 'list',
+    name: 'preset',
+    message: 'Rules preset:',
+    choices: [
+      { name: 'Default — opinionated defaults (no-enum, no-any)', value: 'default' },
+      { name: 'Strict — all recommended coding standards', value: 'strict' },
+      { name: 'Minimal — no coding standards enforced', value: 'minimal' },
+      { name: 'Custom — pick individual rules', value: 'custom' },
+    ],
+    default: 'default',
+  }]);
+
+  if (preset !== 'custom') {
+    return buildPresetRules(preset, architecture);
+  }
+
+  // ─── Custom mode ───
+  const { fileNaming } = await inquirer.prompt<{ fileNaming: NamingConvention }>([{
+    type: 'list',
+    name: 'fileNaming',
+    message: 'Component file naming:',
+    choices: [
+      { name: 'PascalCase (UserProfile.tsx)', value: 'PascalCase' },
+      { name: 'kebab-case (user-profile.tsx)', value: 'kebab-case' },
+      { name: 'camelCase (userProfile.tsx)', value: 'camelCase' },
+      { name: 'snake_case (user_profile.tsx)', value: 'snake_case' },
+    ],
+    default: 'PascalCase',
+  }]);
+
+  const { selectedStandards } = await inquirer.prompt<{ selectedStandards: CodingStandard[] }>([{
+    type: 'checkbox',
+    name: 'selectedStandards',
+    message: 'Coding standards to enforce:',
+    choices: AVAILABLE_STANDARDS,
+  }]);
+
+  const { testSuffix } = await inquirer.prompt<{ testSuffix: string }>([{
+    type: 'list',
+    name: 'testSuffix',
+    message: 'Test file suffix:',
+    choices: [
+      { name: '.test (UserProfile.test.tsx)', value: '.test' },
+      { name: '.spec (UserProfile.spec.tsx)', value: '.spec' },
+    ],
+    default: '.test',
+  }]);
+
+  const archTypes = getArchitectureScaffolderTypes(architecture);
+
+  return {
+    fileNaming: {
+      components: fileNaming,
+      hooks: 'camelCase',
+      utils: 'camelCase',
+      services: 'camelCase',
+      models: 'camelCase',
+      testSuffix,
+    },
+    codingStandards: selectedStandards,
+    testScope: {},
+    scaffolderTypes: archTypes,
+  };
+}
 
 // ─── Framework project creators ───
 

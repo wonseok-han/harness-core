@@ -1,24 +1,24 @@
 import type { HarnessConfig } from '../../types/index.js';
-import { writeText, ensureDir, resolvePath } from '../../utils/index.js';
+import { writeText, ensureDir, resolvePath, namingConventionLabel } from '../../utils/index.js';
 
 export interface GeneratedFiles {
   'CLAUDE.md': string;
-  '.claude/conventions.md': string;
-  '.claude/tech-stack.md': string;
-  '.claude/workflow.md': string;
-  '.claude/coding-principles.md': string;
+  '.claude/rules/harness-conventions.mdc': string;
+  '.claude/rules/harness-tech-stack.mdc': string;
+  '.claude/rules/harness-workflow.mdc': string;
+  '.claude/rules/harness-principles.mdc': string;
 }
 
 export async function generateClaudeRules(root: string, config: HarnessConfig): Promise<GeneratedFiles> {
-  const claudeDir = resolvePath(root, '.claude');
-  await ensureDir(claudeDir);
+  const rulesDir = resolvePath(root, '.claude', 'rules');
+  await ensureDir(rulesDir);
 
   const files: GeneratedFiles = {
     'CLAUDE.md': buildClaudeMd(config),
-    '.claude/conventions.md': buildConventions(config),
-    '.claude/tech-stack.md': buildTechStack(config),
-    '.claude/workflow.md': buildWorkflow(config),
-    '.claude/coding-principles.md': buildCodingPrinciples(),
+    '.claude/rules/harness-conventions.mdc': wrapMdc('Project conventions and coding standards enforced by harness-core', buildConventions(config)),
+    '.claude/rules/harness-tech-stack.mdc': wrapMdc('Tech stack and tooling configuration', buildTechStack(config)),
+    '.claude/rules/harness-workflow.mdc': wrapMdc('Development workflow rules and scaffolding guidelines', buildWorkflow(config)),
+    '.claude/rules/harness-principles.mdc': wrapMdc('Coding principles and best practices', buildCodingPrinciples()),
   };
 
   for (const [path, content] of Object.entries(files)) {
@@ -26,6 +26,10 @@ export async function generateClaudeRules(root: string, config: HarnessConfig): 
   }
 
   return files;
+}
+
+function wrapMdc(description: string, content: string): string {
+  return `---\ndescription: ${description}\nalwaysApply: true\n---\n\n${content}`;
 }
 
 export async function generateClaudeMd(root: string, config: HarnessConfig): Promise<string> {
@@ -52,9 +56,7 @@ function buildClaudeMd(config: HarnessConfig): string {
   lines.push('');
 
   lines.push('## Rules');
-  lines.push('- See `.claude/conventions.md` for code conventions and import rules');
-  lines.push('- See `.claude/tech-stack.md` for tools and dependencies');
-  lines.push('- See `.claude/workflow.md` for development workflow and commands');
+  lines.push('- Conventions, tech stack, workflow, and coding principles are auto-loaded via `.claude/rules/harness-*.mdc`');
   lines.push('');
 
   lines.push('## Agent');
@@ -64,7 +66,7 @@ function buildClaudeMd(config: HarnessConfig): string {
   lines.push('');
   lines.push('## Coding Principles');
   lines.push('');
-  lines.push('See `.claude/coding-principles.md` for behavioral guidelines.');
+  lines.push('Coding principles are auto-loaded via `.claude/rules/harness-principles.mdc`.');
 
   return lines.join('\n') + '\n';
 }
@@ -150,11 +152,24 @@ function buildConventions(config: HarnessConfig): string {
   }
 
   lines.push('## File Naming');
-  lines.push('- Components: PascalCase (`UserProfile.tsx`)');
+  const fn = config.rules?.fileNaming;
+  lines.push(`- Components: ${namingConventionLabel(fn?.components ?? 'PascalCase')}`);
   lines.push('- Hooks: camelCase with `use` prefix (`useAuth.ts`)');
-  lines.push('- Utils/Services: camelCase (`formatDate.ts`, `authService.ts`)');
-  lines.push('- Tests: same name + `.test` suffix (`UserProfile.test.tsx`)');
+  lines.push(`- Utils: ${namingConventionLabel(fn?.utils ?? 'camelCase')}`);
+  lines.push(`- Services: ${namingConventionLabel(fn?.services ?? 'camelCase')}`);
+  lines.push(`- Tests: same name + \`${fn?.testSuffix ?? '.test'}\` suffix`);
   lines.push('');
+
+  const standards = config.rules?.codingStandards;
+  if (standards && standards.length > 0) {
+    lines.push('## Coding Standards');
+    lines.push('');
+    for (const std of standards) {
+      const prefix = std.severity === 'error' ? '🚫' : std.severity === 'warn' ? '⚠️' : '💡';
+      lines.push(`- ${prefix} **${std.id}**: ${std.description}`);
+    }
+    lines.push('');
+  }
 
   lines.push('## Testing');
   if (config.testing.requireTestFileWithImplementation) {

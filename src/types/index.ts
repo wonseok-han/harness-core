@@ -11,6 +11,12 @@ export type {
   Language,
   ArchitectureStyle,
   AgentType,
+  RulesConfig,
+  FileNamingConfig,
+  NamingConvention,
+  CodingStandard,
+  TestScopeConfig,
+  ScaffolderTypeConfig,
 } from './config.js';
 
 export type {

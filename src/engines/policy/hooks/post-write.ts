@@ -1,5 +1,13 @@
-// PostToolUse hook for Write|Edit — checks architecture rules + test companion
-export function generatePostWriteScript(requireTest: boolean): string {
+import type { TestScopeConfig } from '../../../types/index.js';
+
+export function generatePostWriteScript(requireTest: boolean, testScope?: TestScopeConfig): string {
+  const includePatterns = testScope?.include ?? [];
+  const excludePatterns = testScope?.exclude ?? [];
+
+  const scopeCheck = includePatterns.length > 0
+    ? buildGlobCheck(includePatterns, excludePatterns)
+    : defaultScopeCheck();
+
   return `#!/usr/bin/env bash
 # harness: post-write — architecture check + test companion check after file write
 set -euo pipefail
@@ -23,7 +31,19 @@ fi
 
 ${requireTest ? `
 # 2. Test companion check
-if [[ "$REL_PATH" == src/* ]] && [[ "$REL_PATH" == *.ts || "$REL_PATH" == *.tsx ]] && \\
+${scopeCheck}
+` : ''}
+
+if [ -n "$CONTEXT" ]; then
+  echo -e "$CONTEXT"
+fi
+
+exit 0
+`;
+}
+
+function defaultScopeCheck(): string {
+  return `if [[ "$REL_PATH" == src/* ]] && [[ "$REL_PATH" == *.ts || "$REL_PATH" == *.tsx ]] && \\
    [[ "$REL_PATH" != *.test.* ]] && [[ "$REL_PATH" != *.spec.* ]] && \\
    [[ "$REL_PATH" != */index.ts ]] && [[ "$REL_PATH" != */types/* ]] && \\
    [[ "$REL_PATH" != *.d.ts ]]; then
@@ -34,13 +54,29 @@ if [[ "$REL_PATH" == src/* ]] && [[ "$REL_PATH" == *.ts || "$REL_PATH" == *.tsx 
   if [ -z "$TEST_EXISTS" ]; then
     CONTEXT="$CONTEXT\\n⚠️ No test file found for $REL_PATH — create a .test file before committing."
   fi
-fi
-` : ''}
+fi`;
+}
 
-if [ -n "$CONTEXT" ]; then
-  echo -e "$CONTEXT"
+function buildGlobCheck(include: string[], exclude: string[]): string {
+  const includeConditions = include.map((p) => `[[ "$REL_PATH" == ${p} ]]`).join(' || ');
+  const excludeConditions = exclude.length > 0
+    ? exclude.map((p) => `[[ "$REL_PATH" != ${p} ]]`).join(' && ') + ' && '
+    : '';
+
+  return `NEEDS_TEST=false
+if (${includeConditions}) && \\
+   ${excludeConditions}\\
+   [[ "$REL_PATH" != *.test.* ]] && [[ "$REL_PATH" != *.spec.* ]] && \\
+   [[ "$REL_PATH" != */index.ts ]] && [[ "$REL_PATH" != *.d.ts ]]; then
+  NEEDS_TEST=true
 fi
 
-exit 0
-`;
+if [ "$NEEDS_TEST" = true ]; then
+  BASE_NAME=$(basename "$REL_PATH" | sed 's/\\.[^.]*$//')
+  TEST_EXISTS=$(find "$CLAUDE_PROJECT_DIR" -name "$BASE_NAME.test.*" -o -name "$BASE_NAME.spec.*" 2>/dev/null | head -1)
+
+  if [ -z "$TEST_EXISTS" ]; then
+    CONTEXT="$CONTEXT\\n⚠️ No test file found for $REL_PATH — create a .test file before committing."
+  fi
+fi`;
 }

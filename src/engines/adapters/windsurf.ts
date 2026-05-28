@@ -1,7 +1,7 @@
 import type { HarnessConfig } from '../../types/index.js';
 import type { AgentAdapter, GeneratedOutput } from './types.js';
-import { buildProjectContext, buildConventionRules, buildWorkflowRules, buildCodingPrinciplesSection, buildToolsSection } from './shared.js';
-import { writeText, resolvePath } from '../../utils/index.js';
+import { buildProjectContext, buildConventionRules, buildWorkflowRules, buildCodingPrinciplesSection, buildCustomCodingStandards, buildToolsSection } from './shared.js';
+import { writeText, resolvePath, fileExists } from '../../utils/index.js';
 
 export const windsurfAdapter: AgentAdapter = {
   name: 'Windsurf',
@@ -9,24 +9,34 @@ export const windsurfAdapter: AgentAdapter = {
 
   async generate(root: string, config: HarnessConfig): Promise<GeneratedOutput> {
     const files: Record<string, string> = {};
+    const skipped: string[] = [];
 
-    // .windsurfrules
-    const rules = [
-      buildProjectContext(config),
-      buildConventionRules(config),
-      buildWorkflowRules(config),
-      buildCodingPrinciplesSection(),
-      buildToolsSection(config),
-    ].join('\n');
-    files['.windsurfrules'] = rules;
+    const hasExisting = await fileExists(resolvePath(root, '.windsurfrules'));
 
-    for (const [path, content] of Object.entries(files)) {
-      await writeText(resolvePath(root, path), content);
+    if (hasExisting) {
+      skipped.push('.windsurfrules');
+    } else {
+      const rules = [
+        buildProjectContext(config),
+        buildConventionRules(config),
+        buildCustomCodingStandards(config),
+        buildWorkflowRules(config),
+        buildCodingPrinciplesSection(),
+        buildToolsSection(config),
+      ].join('\n');
+      files['.windsurfrules'] = rules;
+
+      await writeText(resolvePath(root, '.windsurfrules'), files['.windsurfrules']);
     }
+
+    const desc = skipped.length > 0
+      ? `skipped (existing .windsurfrules preserved)`
+      : '.windsurfrules';
 
     return {
       files,
-      description: '.windsurfrules',
+      skipped: skipped.length > 0 ? skipped : undefined,
+      description: desc,
     };
   },
 };

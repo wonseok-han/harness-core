@@ -33,6 +33,19 @@ export function createDefaultConfig(overrides: Partial<HarnessConfig> = {}): Har
       allowedScopes: ['src/**/*', 'tests/**/*'],
       adapters: ['generic'],
     },
+    rules: {
+      fileNaming: {
+        components: 'PascalCase',
+        hooks: 'camelCase',
+        utils: 'camelCase',
+        services: 'camelCase',
+        models: 'camelCase',
+        testSuffix: '.test',
+      },
+      codingStandards: [],
+      testScope: {},
+      scaffolderTypes: {},
+    },
   };
 
   return deepMerge(defaults as unknown as Obj, overrides as unknown as Obj) as unknown as HarnessConfig;

@@ -10,5 +10,6 @@ export interface AgentAdapter {
 
 export interface GeneratedOutput {
   files: Record<string, string>;
+  skipped?: string[];
   description: string;
 }

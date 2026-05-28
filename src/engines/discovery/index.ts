@@ -9,7 +9,11 @@ import {
   detectFormatter,
   detectStyling,
   detectProjectName,
+  detectArchitecture,
+  detectAdapters,
+  detectMonorepo,
 } from './detectors.js';
+import type { ArchitectureStyle, AgentType } from '../../types/index.js';
 
 export interface DiscoveryResult {
   config: HarnessConfig;
@@ -26,6 +30,9 @@ export async function discoverProject(root: string): Promise<DiscoveryResult> {
     formatter,
     styling,
     projectName,
+    architecture,
+    adapters,
+    isMonorepo,
   ] = await Promise.all([
     detectPackageManager(root),
     detectFramework(root),
@@ -35,6 +42,9 @@ export async function discoverProject(root: string): Promise<DiscoveryResult> {
     detectFormatter(root),
     detectStyling(root),
     detectProjectName(root),
+    detectArchitecture(root),
+    detectAdapters(root),
+    detectMonorepo(root),
   ]);
 
   const detected: Record<string, string> = {
@@ -46,6 +56,9 @@ export async function discoverProject(root: string): Promise<DiscoveryResult> {
     formatter,
     styling,
     projectName,
+    architecture,
+    adapters: adapters.join(', '),
+    monorepo: String(isMonorepo),
   };
 
   const config = createDefaultConfig({
@@ -54,6 +67,11 @@ export async function discoverProject(root: string): Promise<DiscoveryResult> {
       framework,
       packageManager,
       language,
+    },
+    architecture: {
+      style: architecture as ArchitectureStyle,
+      enforceIndexGen: true,
+      forbiddenImports: {},
     },
     development: {
       linter,
@@ -64,6 +82,11 @@ export async function discoverProject(root: string): Promise<DiscoveryResult> {
       runner: testRunner,
       minCoverage: { statements: 80, branches: 75, functions: 80, lines: 80 },
       requireTestFileWithImplementation: true,
+    },
+    agent: {
+      persona: 'senior-developer',
+      allowedScopes: ['src/**/*', 'tests/**/*'],
+      adapters: adapters as AgentType[],
     },
   });
 
@@ -79,5 +102,7 @@ export {
   detectFormatter,
   detectStyling,
   detectProjectName,
+  detectArchitecture,
+  detectAdapters,
   detectMonorepo,
 } from './detectors.js';

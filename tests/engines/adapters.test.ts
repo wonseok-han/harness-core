@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, mkdir, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { getAdapter, getAllAdapterTypes, getAdapterChoices } from '../../src/engines/adapters/index.js';
@@ -47,23 +47,87 @@ describe('adapter registry', () => {
   });
 });
 
+describe('claude adapter', () => {
+  it('should generate CLAUDE.md and .claude/rules/*.mdc when no CLAUDE.md exists', async () => {
+    const config = createDefaultConfig({
+      project: { name: 'fresh-app', framework: 'nextjs', packageManager: 'pnpm', language: 'typescript' },
+    });
+    const adapter = getAdapter('claude');
+    const result = await adapter.generate(tempDir, config);
+
+    expect(result.files).toHaveProperty('CLAUDE.md');
+    expect(result.files['CLAUDE.md']).toContain('fresh-app');
+    expect(result.skipped).toBeUndefined();
+
+    expect(result.files).toHaveProperty('.claude/rules/harness-conventions.mdc');
+    expect(result.files).toHaveProperty('.claude/rules/harness-workflow.mdc');
+    expect(result.files).toHaveProperty('.claude/rules/harness-tech-stack.mdc');
+    expect(result.files).toHaveProperty('.claude/rules/harness-principles.mdc');
+  });
+
+  it('should use alwaysApply: true in .mdc files', async () => {
+    const config = createDefaultConfig();
+    const adapter = getAdapter('claude');
+    const result = await adapter.generate(tempDir, config);
+
+    for (const [path, content] of Object.entries(result.files)) {
+      if (path.endsWith('.mdc')) {
+        expect(content).toContain('alwaysApply: true');
+      }
+    }
+  });
+
+  it('should skip CLAUDE.md when root CLAUDE.md exists', async () => {
+    await writeFile(join(tempDir, 'CLAUDE.md'), '# Existing project rules\n');
+
+    const config = createDefaultConfig({
+      project: { name: 'existing-app', framework: 'nextjs', packageManager: 'pnpm', language: 'typescript' },
+    });
+    const adapter = getAdapter('claude');
+    const result = await adapter.generate(tempDir, config);
+
+    expect(result.files).not.toHaveProperty('CLAUDE.md');
+    expect(result.skipped).toContain('CLAUDE.md');
+    expect(result.files).toHaveProperty('.claude/rules/harness-conventions.mdc');
+    expect(result.files).toHaveProperty('.claude/rules/harness-workflow.mdc');
+
+    const preserved = await readFile(join(tempDir, 'CLAUDE.md'), 'utf-8');
+    expect(preserved).toBe('# Existing project rules\n');
+  });
+
+  it('should skip CLAUDE.md when .claude/CLAUDE.md exists', async () => {
+    await mkdir(join(tempDir, '.claude'), { recursive: true });
+    await writeFile(join(tempDir, '.claude', 'CLAUDE.md'), '# Team CLAUDE\n');
+
+    const config = createDefaultConfig();
+    const adapter = getAdapter('claude');
+    const result = await adapter.generate(tempDir, config);
+
+    expect(result.files).not.toHaveProperty('CLAUDE.md');
+    expect(result.skipped).toContain('.claude/CLAUDE.md');
+    expect(result.files).toHaveProperty('.claude/rules/harness-conventions.mdc');
+
+    const preserved = await readFile(join(tempDir, '.claude', 'CLAUDE.md'), 'utf-8');
+    expect(preserved).toBe('# Team CLAUDE\n');
+  });
+});
+
 describe('cursor adapter', () => {
-  it('should generate .cursorrules and .cursor/rules/*.mdc', async () => {
+  it('should generate .cursor/rules/harness-*.mdc only (no .cursorrules)', async () => {
     const config = createDefaultConfig({
       project: { name: 'test-app', framework: 'nextjs', packageManager: 'pnpm', language: 'typescript' },
     });
     const adapter = getAdapter('cursor');
     const result = await adapter.generate(tempDir, config);
 
-    expect(result.files).toHaveProperty('.cursorrules');
-    expect(result.files).toHaveProperty('.cursor/rules/conventions.mdc');
-    expect(result.files).toHaveProperty('.cursor/rules/workflow.mdc');
+    expect(result.files).not.toHaveProperty('.cursorrules');
+    expect(result.files).toHaveProperty('.cursor/rules/harness-conventions.mdc');
+    expect(result.files).toHaveProperty('.cursor/rules/harness-workflow.mdc');
+    expect(result.files).toHaveProperty('.cursor/rules/harness-principles.mdc');
+    expect(result.files).toHaveProperty('.cursor/rules/harness-tech-stack.mdc');
 
-    expect(result.files['.cursorrules']).toContain('test-app');
-    expect(result.files['.cursor/rules/conventions.mdc']).toContain('alwaysApply: true');
-
-    const written = await readFile(join(tempDir, '.cursorrules'), 'utf-8');
-    expect(written).toBe(result.files['.cursorrules']);
+    expect(result.files['.cursor/rules/harness-conventions.mdc']).toContain('alwaysApply: true');
+    expect(result.files['.cursor/rules/harness-conventions.mdc']).toContain('test-app');
   });
 });
 

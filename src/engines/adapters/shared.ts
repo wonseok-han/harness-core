@@ -1,4 +1,5 @@
-import type { HarnessConfig } from '../../types/index.js';
+import type { HarnessConfig, NamingConvention } from '../../types/index.js';
+import { namingConventionLabel } from '../../utils/index.js';
 
 export function buildProjectContext(config: HarnessConfig): string {
   const lines: string[] = [];
@@ -32,10 +33,12 @@ export function buildConventionRules(config: HarnessConfig): string {
   }
 
   lines.push('## File Naming');
-  lines.push('- Components: PascalCase (UserProfile.tsx)');
-  lines.push('- Hooks: camelCase with use prefix (useAuth.ts)');
-  lines.push('- Utils/Services: camelCase (formatDate.ts)');
-  lines.push('- Tests: same name + .test suffix (UserProfile.test.tsx)');
+  const fn = config.rules?.fileNaming;
+  lines.push(`- Components: ${namingConventionLabel(fn?.components ?? 'PascalCase')}`);
+  lines.push(`- Hooks: camelCase with use prefix (useAuth.ts)`);
+  lines.push(`- Utils: ${namingConventionLabel(fn?.utils ?? 'camelCase')}`);
+  lines.push(`- Services: ${namingConventionLabel(fn?.services ?? 'camelCase')}`);
+  lines.push(`- Tests: same name + ${fn?.testSuffix ?? '.test'} suffix`);
   lines.push('');
 
   return lines.join('\n');
@@ -57,7 +60,10 @@ export function buildWorkflowRules(config: HarnessConfig): string {
   lines.push('```');
   lines.push('harness generate <type> <name>');
   lines.push('```');
-  lines.push('Available types: component, hook, util, service, model.');
+  const builtins = ['component', 'hook', 'util', 'service', 'model'];
+  const custom = Object.keys(config.rules?.scaffolderTypes ?? {});
+  const allTypes = [...new Set([...builtins, ...custom])];
+  lines.push(`Available types: ${allTypes.join(', ')}.`);
   lines.push('');
   lines.push('Do NOT create files manually. The scaffolder ensures:');
   lines.push('- Correct directory placement per architecture style');
@@ -98,6 +104,21 @@ export function buildCodingPrinciplesSection(): string {
   lines.push('4. **Goal-Driven Execution** — Define verifiable success criteria before coding. Loop until verified.');
   lines.push('');
 
+  return lines.join('\n');
+}
+
+export function buildCustomCodingStandards(config: HarnessConfig): string {
+  const standards = config.rules?.codingStandards;
+  if (!standards || standards.length === 0) return '';
+
+  const lines: string[] = [];
+  lines.push('## Project Coding Standards');
+  lines.push('');
+  for (const std of standards) {
+    const prefix = std.severity === 'error' ? '🚫' : std.severity === 'warn' ? '⚠️' : '💡';
+    lines.push(`- ${prefix} **${std.id}**: ${std.description}`);
+  }
+  lines.push('');
   return lines.join('\n');
 }
 

@@ -92,18 +92,19 @@ describe('generateClaudeRules', () => {
     const claudeMd = await readFile(join(tempDir, 'CLAUDE.md'), 'utf-8');
     expect(claudeMd).toBe(files['CLAUDE.md']);
 
-    // conventions.md
-    expect(files['.claude/conventions.md']).toContain('features/*');
-    expect(files['.claude/conventions.md']).toContain('barrel export');
-    const conventions = await readFile(join(tempDir, '.claude', 'conventions.md'), 'utf-8');
-    expect(conventions).toBe(files['.claude/conventions.md']);
+    // conventions.mdc
+    expect(files['.claude/rules/harness-conventions.mdc']).toContain('features/*');
+    expect(files['.claude/rules/harness-conventions.mdc']).toContain('barrel export');
+    expect(files['.claude/rules/harness-conventions.mdc']).toContain('alwaysApply: true');
+    const conventions = await readFile(join(tempDir, '.claude', 'rules', 'harness-conventions.mdc'), 'utf-8');
+    expect(conventions).toBe(files['.claude/rules/harness-conventions.mdc']);
 
-    // tech-stack.md
-    const techStack = await readFile(join(tempDir, '.claude', 'tech-stack.md'), 'utf-8');
+    // tech-stack.mdc
+    const techStack = await readFile(join(tempDir, '.claude', 'rules', 'harness-tech-stack.mdc'), 'utf-8');
     expect(techStack).toContain('vitest');
 
-    // workflow.md
-    const workflow = await readFile(join(tempDir, '.claude', 'workflow.md'), 'utf-8');
+    // workflow.mdc
+    const workflow = await readFile(join(tempDir, '.claude', 'rules', 'harness-workflow.mdc'), 'utf-8');
     expect(workflow).toContain('harness generate');
   });
 });

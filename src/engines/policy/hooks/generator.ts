@@ -29,7 +29,7 @@ export async function generateClaudeHooks(root: string, config: HarnessConfig): 
 
   await writeScript(
     resolvePath(hooksDir, 'post-write.sh'),
-    generatePostWriteScript(config.testing.requireTestFileWithImplementation),
+    generatePostWriteScript(config.testing.requireTestFileWithImplementation, config.rules?.testScope),
   );
 
   await writeScript(
